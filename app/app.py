@@ -90,7 +90,7 @@ def highlight_row(row):
         return styles
 
     nama_idx = row.index.get_loc('Nama Iklan')
-    sales_idx = row.index.get_loc('Penjualan Langsung (GMV Langsung)')
+    sales_idx = row.index.get_loc('Produk Terjual')
 
     # PRIORITAS 1 — rugi keras
     if sales == 0 and cost >= 10000:
