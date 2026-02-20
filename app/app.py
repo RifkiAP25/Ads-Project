@@ -9,9 +9,14 @@ import io
 import os
 import re
 from io import BytesIO
-from datetime import datetime
+from datetime import datetime, date         # <-- Pastikan 'date' di-import
 from typing import Optional
+from collections import OrderedDict         # <-- Tambahan baru
+from openpyxl import load_workbook          # <-- Tambahan baru
+from pandas.io.formats.style import Styler  # <-- Tambahan baru
 
+# Set global page config once
+st.set_page_config(page_title="Multi-Platform Excel Utilities", layout="wide")
 # Set global page config once
 st.set_page_config(page_title="Multi-Platform Excel Utilities", layout="wide")
 
@@ -824,38 +829,23 @@ def app_meta():
 # -----------------------------
 
 def app_tiktok():
-    st.title("🎵 Excel Tools — PURE & Fixer (TikTok)")
+    st.title("🎵 Excel Tools — TikTok")
 
-    st.markdown("""
-    Aplikasi gabungan: Pewarnaan ROI (PURE) + Excel Fixer: Campaign ID & Comma
-    """)
-
+    # -----------------------------
+    # Helper & Config untuk PURE & Fixer (Fitur 1 & 2)
+    # -----------------------------
     percent_cols = [
-        'Tingkat klik iklan produk',
-        'Rasio konversi iklan',
-        'Rasio tayang video iklan 2 detik',
-        'Rasio tayang video iklan 6 detik',
-        'Rasio tayang video iklan 25%',
-        'Rasio tayang video iklan 50%',
-        'Rasio tayang video iklan 75%',
-        'Rasio tayang video iklan 100%'
+        'Tingkat klik iklan produk', 'Rasio konversi iklan', 'Rasio tayang video iklan 2 detik',
+        'Rasio tayang video iklan 6 detik', 'Rasio tayang video iklan 25%', 'Rasio tayang video iklan 50%',
+        'Rasio tayang video iklan 75%', 'Rasio tayang video iklan 100%'
     ]
 
     @st.cache_data
     def load_excel(file, sheet_name=0):
         file.seek(0)
         temp_df = pd.read_excel(file, sheet_name=sheet_name, nrows=0, engine="openpyxl")
-        all_cols = temp_df.columns
-
-        target_col = None
-        for col in all_cols:
-            c_str = str(col).lower()
-            if "id" in c_str:
-                target_col = col
-                break
-
+        target_col = next((col for col in temp_df.columns if "id" in str(col).lower()), None)
         type_rules = {target_col: str} if target_col else None
-
         file.seek(0)
         df = pd.read_excel(file, sheet_name=sheet_name, engine="openpyxl", dtype=type_rules)
         df.columns = df.columns.str.strip()
@@ -865,25 +855,17 @@ def app_tiktok():
         kws = [k.lower() for k in keywords]
         for col in df.columns:
             low = str(col).lower()
-            for kw in kws:
-                if kw in low:
-                    return col
+            if any(kw in low for kw in kws):
+                return col
         return None
 
     def series_to_numeric_like(df_col):
         s_orig = df_col.astype(str).fillna("").str.strip()
         had_pct = s_orig.str.contains("%")
         s = s_orig.copy()
-
         has_paren = s.str.startswith("(") & s.str.endswith(")")
         s = s.mask(has_paren, "-" + s.str[1:-1])
-
-        s = s.str.replace("%", "", regex=False)
-        s = s.str.replace(",", "", regex=False)
-        s = s.str.replace(" ", "", regex=False)
-
-        s = s.replace("", np.nan)
-
+        s = s.str.replace("%", "", regex=False).str.replace(",", "", regex=False).str.replace(" ", "", regex=False).replace("", np.nan)
         numeric = pd.to_numeric(s, errors="coerce")
         numeric = numeric.where(~had_pct, numeric / 100.0)
         return numeric
@@ -895,21 +877,14 @@ def app_tiktok():
 
             def parse_val(val):
                 try:
-                    if pd.isna(val):
-                        return np.nan
-                    if isinstance(val, (int, float, np.floating, np.integer)):
-                        return float(val)
+                    if pd.isna(val): return np.nan
+                    if isinstance(val, (int, float, np.floating, np.integer)): return float(val)
                     s = str(val).strip()
-                    if s == "":
-                        return np.nan
+                    if s == "": return np.nan
                     had_pct = "%" in s
-                    if s.startswith("(") and s.endswith(")"):
-                        s = "-" + s[1:-1]
-                    s = s.replace("%", "").replace(",", "").replace(" ", "")
-                    num = float(s)
-                    if had_pct:
-                        num = num / 100.0
-                    return num
+                    if s.startswith("(") and s.endswith(")"): s = "-" + s[1:-1]
+                    num = float(s.replace("%", "").replace(",", "").replace(" ", ""))
+                    return num / 100.0 if had_pct else num
                 except Exception:
                     return np.nan
 
@@ -921,38 +896,19 @@ def app_tiktok():
                 return styles
 
             if col_status is not None and col_status in row.index:
-                try:
-                    status_text = str(row[col_status]).strip().lower()
-                except Exception:
-                    status_text = ""
+                status_text = str(row[col_status]).strip().lower() if pd.notna(row[col_status]) else ""
                 if status_text == "perlu otorisasi":
                     styles = ['background-color: #98f073'] * len(row)
-                    try:
-                        styles[idx[col_status]] = 'background-color: #ff7979'
-                    except KeyError:
-                        pass
+                    if col_status in idx: styles[idx[col_status]] = 'background-color: #ff7979'
                     return styles
 
-            if pd.isna(roi_val):
-                return styles
-
+            if pd.isna(roi_val): return styles
             biaya_pos = (pd.notna(biaya_val) and biaya_val > 0)
             pendapatan_pos = (pd.notna(pendapatan_val) and pendapatan_val > 0)
-
-            if not (biaya_pos or pendapatan_pos):
-                return styles
-
-            if roi_val == 0:
-                return styles
-
-            if roi_val >= 10:
-                return ['background-color: #00ff00'] * len(row)
-
-            if roi_val < 10:
-                return ['background-color: #ffff00'] * len(row)
-
+            if not (biaya_pos or pendapatan_pos) or roi_val == 0: return styles
+            if roi_val >= 10: return ['background-color: #00ff00'] * len(row)
+            if roi_val < 10: return ['background-color: #ffff00'] * len(row)
             return styles
-
         return highlight_row
 
     try:
@@ -966,38 +922,30 @@ def app_tiktok():
         try:
             file.seek(0)
             temp_df = pd.read_excel(file, sheet_name=sheet_name, nrows=0, engine="openpyxl")
-            all_cols = temp_df.columns
-
             dtype_dict = {}
             target_col = None
-
-            for col in all_cols:
-                c_str = str(col).lower()
-                if "id" in c_str:
+            for col in temp_df.columns:
+                if "id" in str(col).lower():
                     dtype_dict[col] = str
                     target_col = col
                     break
-
             file.seek(0)
             final_df = pd.read_excel(file, sheet_name=sheet_name, dtype=dtype_dict, engine="openpyxl")
-
             for col in final_df.columns:
-                if col == target_col:
-                    continue
+                if col == target_col: continue
                 if final_df[col].dtype == "object":
                     try:
                         final_df[col] = final_df[col].astype(str).str.replace(',', '.', regex=False)
                         final_df[col] = pd.to_numeric(final_df[col], errors='ignore')
-                    except Exception:
-                        pass
-
+                    except Exception: pass
             return final_df, target_col
-
-        except Exception as e:
+        except Exception:
             return None, None
 
-    # NAVBAR for this app (mini)
-    PAGES_TIKTOK = ["📊 Pewarnaan ROI (PURE)", "🛠️ Excel Fixer: Campaign ID & Comma"]
+    # -----------------------------
+    # NAVBAR MINI TIKTOK (Ada 3 Tab Sekarang)
+    # -----------------------------
+    PAGES_TIKTOK = ["📊 Pewarnaan ROI (PURE)", "🛠️ Excel Fixer: Campaign ID & Comma", "📅 Daily Ads Comparator"]
     if "page_tiktok" not in st.session_state:
         st.session_state.page_tiktok = PAGES_TIKTOK[0]
 
@@ -1008,10 +956,12 @@ def app_tiktok():
                 st.session_state.page_tiktok = p
     st.markdown("---")
 
+    # ==========================================
+    # HALAMAN 1: PEWARNAAN ROI
+    # ==========================================
     if st.session_state.page_tiktok == "📊 Pewarnaan ROI (PURE)":
         st.header("📊 Excel Iklan → Pewarnaan ROI (PURE)")
         st.caption("Input Excel (.xlsx/.xls). Hanya ganti warna berdasarkan kolom ROI yang ada — data tidak diubah.")
-
         uploaded_file_roi = st.file_uploader("Upload file Excel iklan (.xlsx / .xls)", type=["xlsx", "xls"], key="uploader_roi_tiktok")
 
         if uploaded_file_roi:
@@ -1027,10 +977,7 @@ def app_tiktok():
 
             if st.button("🚀 Proses & Download (aturan final)", key="process_roi_tiktok"):
                 try:
-                    if sheet_choice and sheet_choice != "(sheet pertama)":
-                        df = load_excel(uploaded_file_roi, sheet_name=sheet_choice)
-                    else:
-                        df = load_excel(uploaded_file_roi, sheet_name=0)
+                    df = load_excel(uploaded_file_roi, sheet_name=sheet_choice if sheet_choice and sheet_choice != "(sheet pertama)" else 0)
 
                     col_biaya = find_column(df, ["biaya", "cost"])
                     col_pendapatan_kotor = find_column(df, ["pendapatan kotor", "pendapatan_kotor", "pendapatan", "gmv", "revenue"])
@@ -1046,134 +993,72 @@ def app_tiktok():
                         col_pendapatan_effective = col_pendapatan_bruto
                     elif col_pendapatan_kotor:
                         bonus_keywords = ["bonus", "komisi", "tunjangan", "insentif", "incentive"]
-                        found_bonus_cols = [c for c in df.columns if any(k in str(c).lower() for k in bonus_keywords)]
-                        if found_bonus_cols:
+                        if any(any(k in str(c).lower() for k in bonus_keywords) for c in df.columns):
                             col_pendapatan_effective = pendapatan_computed_name
                             bruto_was_computed = True
                         else:
                             col_pendapatan_effective = col_pendapatan_kotor
-                    else:
-                        col_pendapatan_effective = None
 
-                    missing = []
-                    if not col_biaya:
-                        missing.append("Biaya")
-                    if not (col_pendapatan_kotor or col_pendapatan_bruto):
-                        missing.append("Pendapatan (kolom 'pendapatan kotor' atau 'pendapatan bruto')")
-                    if not col_roi:
-                        missing.append("ROI")
-
+                    missing = [m for m, cond in zip(["Biaya", "Pendapatan", "ROI"], [col_biaya, col_pendapatan_kotor or col_pendapatan_bruto, col_roi]) if not cond]
                     if missing:
-                        st.error(f"Kolom wajib tidak ditemukan: {', '.join(missing)}. Pastikan file memiliki header yang sesuai.")
+                        st.error(f"Kolom wajib tidak ditemukan: {', '.join(missing)}.")
                     else:
                         biaya_num = series_to_numeric_like(df[col_biaya])
-                        if col_pendapatan_kotor:
-                            pendapatan_for_deletion = series_to_numeric_like(df[col_pendapatan_kotor])
-                        elif col_pendapatan_bruto:
-                            pendapatan_for_deletion = series_to_numeric_like(df[col_pendapatan_bruto])
-                        else:
-                            pendapatan_for_deletion = pd.Series([np.nan]*len(df))
-
+                        pendapatan_for_deletion = series_to_numeric_like(df[col_pendapatan_kotor if col_pendapatan_kotor else col_pendapatan_bruto])
                         roi_num = series_to_numeric_like(df[col_roi])
+                        
                         delete_mask = (biaya_num == 0) & (pendapatan_for_deletion == 0) & (roi_num == 0)
-                        before_count = len(df)
                         df_filtered = df.loc[~delete_mask].copy()
-                        removed_count = int(delete_mask.sum())
 
                         pct_present = [c for c in percent_cols if c in df_filtered.columns]
-                        missing_pct = [c for c in percent_cols if c not in df_filtered.columns]
-                        if missing_pct:
-                            st.warning(f"Beberapa kolom percent tidak ditemukan dan akan diabaikan: {missing_pct}")
-
                         df_colored = df_filtered.copy()
-                        for c in pct_present:
-                            df_colored[c] = series_to_numeric_like(df_colored[c])
+                        for c in pct_present: df_colored[c] = series_to_numeric_like(df_colored[c])
 
                         if bruto_was_computed:
                             base = series_to_numeric_like(df_colored[col_pendapatan_kotor]).fillna(0)
-                            bonus_keywords = ["bonus", "komisi", "tunjangan", "insentif", "incentive"]
-                            found_bonus_cols = [c for c in df_colored.columns if any(k in str(c).lower() for k in bonus_keywords)]
                             extras = pd.Series(0.0, index=df_colored.index)
-                            for bcol in found_bonus_cols:
-                                extras = extras + series_to_numeric_like(df_colored[bcol]).fillna(0)
+                            for bcol in [c for c in df_colored.columns if any(k in str(c).lower() for k in ["bonus", "komisi", "tunjangan", "insentif", "incentive"])]:
+                                extras += series_to_numeric_like(df_colored[bcol]).fillna(0)
                             df_colored[pendapatan_computed_name] = base + extras
                             col_pendapatan_effective = pendapatan_computed_name
 
-                        if col_pendapatan_effective is None:
-                            col_pendapatan_effective = col_pendapatan_kotor or col_pendapatan_bruto
+                        if col_pendapatan_effective is None: col_pendapatan_effective = col_pendapatan_kotor or col_pendapatan_bruto
 
-                        st.write("Preview (5 baris pertama dari data yang akan diwarnai) — data asal TIDAK DIUBAH:")
+                        st.write("Preview (5 baris pertama dari data yang akan diwarnai):")
                         st.dataframe(df_colored.head(5))
-
-                        st.write({
-                            "rows_before": int(before_count),
-                            "rows_after_filter": int(len(df_colored)),
-                            "rows_removed_where_biaya_pendapatan_roi_all_zero": removed_count,
-                            "using_columns": {
-                                "Biaya": col_biaya,
-                                "Pendapatan Kotor (if any)": col_pendapatan_kotor,
-                                "Pendapatan Bruto (if present)": col_pendapatan_bruto,
-                                "Pendapatan Efektif (digunakan untuk pewarnaan)": str(col_pendapatan_effective) + (" (computed from kotor + bonus/...)" if bruto_was_computed else ""),
-                                "ROI": col_roi,
-                                "Status (if any)": col_status,
-                                "percent_cols_used": pct_present
-                            }
-                        })
 
                         highlighter = make_highlighter(col_biaya, col_pendapatan_effective, col_roi, col_status)
                         styled = df_colored.style.apply(highlighter, axis=1)
 
                         buffer = io.BytesIO()
-                        base = uploaded_file_roi.name.rsplit(".", 1)[0]
-                        outname = f"{base}_colored_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
+                        outname = f"{uploaded_file_roi.name.rsplit('.', 1)[0]}_colored_{datetime.now():%Y%m%d_%H%M%S}.xlsx"
 
                         with pd.ExcelWriter(buffer, engine="openpyxl") as writer:
                             styled.to_excel(writer, sheet_name="DATA_COLORED", index=False)
                             df.to_excel(writer, sheet_name="DATA_ASLI", index=False)
-
-                            workbook  = writer.book
                             ws = writer.sheets["DATA_COLORED"]
-
                             for col in pct_present:
                                 try:
                                     col_idx = df_colored.columns.get_loc(col) + 1
-                                except Exception:
-                                    continue
-                                for row_cells in ws.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx, max_row=ws.max_row):
-                                    for cell in row_cells:
-                                        if cell.value is not None:
+                                    for row_cells in ws.iter_rows(min_row=2, min_col=col_idx, max_col=col_idx, max_row=ws.max_row):
+                                        for cell in row_cells:
                                             if isinstance(cell.value, (int, float, complex)) and not isinstance(cell.value, bool):
-                                                try:
-                                                    cell.number_format = '0.00%'
-                                                except Exception:
-                                                    pass
+                                                cell.number_format = '0.00%'
+                                except Exception: pass
 
                         buffer.seek(0)
                         st.success("File berwarna siap di-download 👇")
-                        st.download_button(
-                            "Download Excel (warna berdasarkan ROI asli)",
-                            buffer,
-                            outname,
-                            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                            key="download_roi_tiktok"
-                        )
+                        st.download_button("Download Excel (warna berdasarkan ROI asli)", buffer, outname, key="download_roi_tiktok")
 
                 except Exception as e:
                     st.error(f"Ada error saat memproses: {e}")
-                    st.exception(e)
 
+    # ==========================================
+    # HALAMAN 2: EXCEL FIXER
+    # ==========================================
     elif st.session_state.page_tiktok == "🛠️ Excel Fixer: Campaign ID & Comma":
         st.header("Excel Fixer: Campaign ID & Comma")
-        st.markdown("""
-        Aplikasi ini:
-        1. Mengamankan kolom **ID Campaign** agar tidak berubah jadi notasi ilmiah (`E+10`).
-        2. Mengganti **koma (',')** menjadi **titik ('.')** pada kolom angka lain.
-        """)
-
-        if EXCEL_ENGINE == "openpyxl":
-            st.info("Deteksi engine: `openpyxl` (fitur auto-resize kolom terbatas). Untuk hasil terbaik, install `XlsxWriter`:\n`pip install XlsxWriter`")
-        else:
-            st.success("Deteksi engine: `XlsxWriter` (auto-resize kolom akan aktif).")
+        st.markdown("Mengamankan **ID Campaign** dari `E+10` dan mengganti koma `,` menjadi titik `.`")
 
         uploaded_file_fix = st.file_uploader("Upload File Excel (.xlsx / .xls)", type=["xlsx", "xls"], key="uploader_fix_tiktok")
 
@@ -1182,16 +1067,13 @@ def app_tiktok():
                 df_hasil, kolom_target = load_excel_safe(uploaded_file_fix)
 
             if df_hasil is None:
-                st.error("Gagal memproses file. Pastikan file Excel valid dan bukan file yang rusak.")
+                st.error("Gagal memproses file.")
             else:
                 st.success("✅ Data berhasil diproses!")
-
                 col1, col2 = st.columns(2)
                 with col1:
-                    if kolom_target:
-                        st.info(f"🛡️ Kolom ID diamankan: **{kolom_target}**")
-                    else:
-                        st.warning("⚠️ Kolom ID Campaign tidak ditemukan (Pastikan nama kolom mengandung 'id' dan 'campaign').")
+                    if kolom_target: st.info(f"🛡️ Kolom ID diamankan: **{kolom_target}**")
+                    else: st.warning("⚠️ Kolom ID Campaign tidak ditemukan.")
                 with col2:
                     st.write(f"📊 Baris: **{len(df_hasil)}** | Kolom: **{len(df_hasil.columns)}**")
 
@@ -1201,37 +1083,320 @@ def app_tiktok():
                 try:
                     with pd.ExcelWriter(buffer, engine=EXCEL_ENGINE) as writer:
                         df_hasil.to_excel(writer, index=False, sheet_name="Sheet1")
-
                         try:
                             worksheet = writer.sheets["Sheet1"]
                             if EXCEL_ENGINE == "xlsxwriter":
                                 for i, col in enumerate(df_hasil.columns):
-                                    max_len = max(df_hasil[col].astype(str).map(len).max(), len(str(col))) + 2
-                                    worksheet.set_column(i, i, max_len)
+                                    worksheet.set_column(i, i, max(df_hasil[col].astype(str).map(len).max(), len(str(col))) + 2)
                             else:
-                                try:
-                                    from openpyxl.utils import get_column_letter
-                                    for i, col in enumerate(df_hasil.columns, 1):
-                                        max_len = max(df_hasil[col].astype(str).map(len).max(), len(str(col))) + 2
-                                        worksheet.column_dimensions[get_column_letter(i)].width = max_len
-                                except Exception:
-                                    pass
-                        except Exception:
-                            pass
-
+                                from openpyxl.utils import get_column_letter
+                                for i, col in enumerate(df_hasil.columns, 1):
+                                    worksheet.column_dimensions[get_column_letter(i)].width = max(df_hasil[col].astype(str).map(len).max(), len(str(col))) + 2
+                        except Exception: pass
                     buffer.seek(0)
-
-                    st.download_button(
-                        label="📥 Download Hasil (.xlsx)",
-                        data=buffer,
-                        file_name="campaign_fixed.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        key="download_fix_tiktok"
-                    )
+                    st.download_button("📥 Download Hasil (.xlsx)", buffer, "campaign_fixed.xlsx", key="download_fix_tiktok")
                 except Exception as e:
                     st.error(f"Gagal menulis file Excel: {e}")
-                    st.write("Coba install `XlsxWriter` atau `openpyxl` dan jalankan lagi.")
 
+    # ==========================================
+    # HALAMAN 3: DAILY ADS COMPARATOR
+    # ==========================================
+    elif st.session_state.page_tiktok == "📅 Daily Ads Comparator":
+        st.header("Ads Performance Comparator — DAILY FOCUS")
+        st.markdown("""
+        Upload TikTok exports per hari (header row 3, data row 4). Cache akan otomatis menyimpan dan menggabungkan datanya.
+        """)
+
+        # Config & Helper Functions Scope
+        ALLOWED_METRICS = [
+            "ID", "Produk", "Status", "GMV", "Produk terjual", "Pesanan", "GMV tab Toko",
+            "Impresi daftar produk tab Toko", "Rasio klik-tayang shop tab", "GMV dari LIVE",
+            "Impresi dari LIVE", "Rasio klik-tayang dari LIVE", "GMV dari video",
+            "Impresi dari video", "Rasio klik-tayang dari video", "Impresi dari kartu produk",
+            "Tayangan halaman dari kartu produk", "Tayangan halaman unik dari kartu produk",
+            "Pembeli unik dari kartu produk", "Rasio klik-tayang dari kartu produk",
+            "Persentase konversi dari kartu produk",
+        ]
+        MAX_CACHE = 14
+        PERCENT_NAME_KEYWORDS = ["rasio", "rasio klik", "persentase", "konversi", "ctr", "ratio"]
+
+        def read_date_from_a1(uploaded_file) -> date:
+            try:
+                data = uploaded_file.read() if hasattr(uploaded_file, "read") else uploaded_file
+                wb = load_workbook(filename=io.BytesIO(data) if isinstance(data, bytes) else data, data_only=True)
+                raw = wb.active["A1"].value
+                if isinstance(raw, datetime): return raw.date()
+                if isinstance(raw, date): return raw
+                if isinstance(raw, (int, float)):
+                    try: return datetime.fromordinal(datetime(1900, 1, 1).toordinal() + int(raw) - 2).date()
+                    except Exception: return raw
+                if isinstance(raw, str):
+                    for fmt in ("%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%m/%d/%Y", "%Y/%m/%d"):
+                        try: return datetime.strptime(raw.strip(), fmt).date()
+                        except Exception: pass
+                    return raw.strip()
+                return raw
+            except Exception:
+                return None
+
+        def read_data_table(uploaded_file) -> pd.DataFrame:
+            try:
+                if hasattr(uploaded_file, "read"):
+                    try: uploaded_file.seek(0)
+                    except Exception: pass
+                return pd.read_excel(uploaded_file, header=2, engine="openpyxl")
+            except Exception:
+                return pd.DataFrame()
+
+        def normalize_and_filter_df(df: pd.DataFrame) -> pd.DataFrame:
+            df.columns = [str(c).strip() for c in df.columns]
+            df = df.reindex(columns=[c for c in ALLOWED_METRICS if c in df.columns])
+            for s in ["ID", "Produk", "Status"]:
+                if s in df.columns: df[s] = df[s].astype(str)
+            for col in df.columns:
+                if col in ("ID", "Produk", "Status"): continue
+                is_percent = any(k in col.lower() for k in PERCENT_NAME_KEYWORDS)
+                if df[col].dtype == object or is_percent:
+                    def try_parse(x):
+                        if pd.isna(x): return None
+                        if isinstance(x, str):
+                            v = x.strip().replace(',', '')
+                            if v.endswith('%'):
+                                try: return float(v.rstrip('%')) / 100.0
+                                except Exception: return None
+                            try: return float(v)
+                            except Exception: return None
+                        if isinstance(x, (int, float)):
+                            if is_percent and x > 1: return float(x) / 100.0
+                            return float(x)
+                        return None
+                    df[col] = df[col].apply(try_parse)
+                df[col] = pd.to_numeric(df[col], errors='coerce') if col not in ("ID", "Produk", "Status") else df[col]
+            return df
+
+        def add_to_session_cache(date_val, df):
+            date_key = str(date_val)
+            if "tiktok_daily_datasets" not in st.session_state:
+                st.session_state["tiktok_daily_datasets"] = OrderedDict()
+            datasets = st.session_state["tiktok_daily_datasets"]
+            datasets[date_key] = df
+            while len(datasets) > MAX_CACHE: datasets.popitem(last=False)
+            st.session_state["tiktok_daily_datasets"] = datasets
+
+        def clear_cache(): st.session_state["tiktok_daily_datasets"] = OrderedDict()
+
+        def remove_date_from_cache(date_key):
+            if "tiktok_daily_datasets" in st.session_state and date_key in st.session_state["tiktok_daily_datasets"]:
+                st.session_state["tiktok_daily_datasets"].pop(date_key)
+
+        def build_daily_aggregate(datasets: OrderedDict) -> pd.DataFrame:
+            if not datasets: return pd.DataFrame()
+            frames = []
+            for date_key, df in datasets.items():
+                parsed = pd.to_datetime(date_key, errors='coerce')
+                if pd.isna(parsed):
+                    try: parsed = pd.to_datetime(str(date_key).split()[0], errors='coerce')
+                    except Exception: parsed = None
+                if pd.isna(parsed): continue
+                
+                df2 = df[[c for c in ALLOWED_METRICS if c in df.columns]].copy()
+                numeric = df2.select_dtypes(include=['number']).columns.tolist()
+                summed = df2[numeric].sum(axis=0) if numeric else pd.Series(dtype=float)
+                summed = summed.to_frame().T
+                summed['date'] = pd.to_datetime(parsed)
+                frames.append(summed)
+
+            if not frames: return pd.DataFrame()
+            agg = pd.concat(frames, ignore_index=True).set_index('date')
+            agg.index = pd.to_datetime(agg.index).date
+            return agg.sort_index()
+
+        def style_daily_aggregate(df: pd.DataFrame) -> Styler:
+            if df.empty: return df
+            numeric_cols = df.select_dtypes(include=['number']).columns.tolist()
+            diffs = df[numeric_cols].diff()
+            styles = pd.DataFrame('', index=df.index, columns=df.columns)
+            for col in numeric_cols:
+                for idx in df.index:
+                    d = diffs.loc[idx, col]
+                    if pd.notna(d):
+                        if d > 0: styles.at[idx, col] = 'background-color: #b6f2c2'
+                        elif d < 0: styles.at[idx, col] = 'background-color: #f5b7b1'
+                        else: styles.at[idx, col] = 'background-color: white'
+
+            def fmt(x, col=None):
+                if pd.isna(x): return ""
+                if col and any(k in col.lower() for k in PERCENT_NAME_KEYWORDS):
+                    try: return f"{x:.2%}"
+                    except Exception: return x
+                else:
+                    try: return f"{int(x):,}" if float(x).is_integer() else f"{x:,.2f}"
+                    except Exception: return x
+
+            return df.style.format({c: (lambda v, col=c: fmt(v, col)) for c in df.columns}).apply(lambda _: styles, axis=None)
+
+        def build_product_sheets(datasets: OrderedDict) -> bytes:
+            if not datasets: return None
+            frames = []
+            for date_key, df in datasets.items():
+                parsed = pd.to_datetime(str(date_key).split('~')[0].strip(), errors='coerce')
+                if pd.notna(parsed):
+                    d = df.copy()
+                    d['date'] = pd.to_datetime(parsed)
+                    frames.append(d)
+            if not frames: return None
+
+            concat = pd.concat(frames, ignore_index=True, sort=False)
+            if 'Produk' not in concat.columns: return None
+
+            numeric_metrics = [c for c in ALLOWED_METRICS if c in concat.columns and c not in ('ID', 'Produk', 'Status')]
+            bytes_io = io.BytesIO()
+            with pd.ExcelWriter(bytes_io, engine='openpyxl') as writer:
+                for product_name, grp in concat.groupby('Produk'):
+                    row = grp.groupby('date')[numeric_metrics].sum().reset_index().sort_values('date')
+                    safe_sheet_name = str(product_name)[:31] if product_name else 'Unknown'
+                    row.to_excel(writer, sheet_name=safe_sheet_name, index=False)
+                    ws = writer.book[safe_sheet_name]
+
+                    ws.column_dimensions['A'].width = 15
+                    for cell in ws['A'][1:]: cell.number_format = 'yyyy-mm-dd'
+
+                    from openpyxl.formatting.rule import FormulaRule
+                    from openpyxl.styles import PatternFill
+                    from openpyxl.chart import LineChart, Reference
+
+                    green_fill = PatternFill(start_color="B6F2C2", end_color="B6F2C2", fill_type="solid")
+                    red_fill = PatternFill(start_color="F5B7B1", end_color="F5B7B1", fill_type="solid")
+
+                    for col_idx in range(2, ws.max_column + 1):
+                        col_name = str(ws.cell(row=1, column=col_idx).value).lower()
+                        col_letter = ws.cell(row=1, column=col_idx).column_letter
+                        is_percent = any(k in col_name for k in PERCENT_NAME_KEYWORDS)
+                        for row_idx in range(2, ws.max_row + 1):
+                            ws.cell(row=row_idx, column=col_idx).number_format = '0.00%' if is_percent else '#,##0'
+                        if ws.max_row >= 3:
+                            cf_range = f"{col_letter}3:{col_letter}{ws.max_row}"
+                            ws.conditional_formatting.add(cf_range, FormulaRule(formula=[f"{col_letter}3>{col_letter}2"], fill=green_fill))
+                            ws.conditional_formatting.add(cf_range, FormulaRule(formula=[f"{col_letter}3<{col_letter}2"], fill=red_fill))
+
+                    if ws.max_row >= 2:
+                        start_chart_row, chart_idx = ws.max_row + 3, 0
+                        for col_idx in range(2, ws.max_column + 1):
+                            chart = LineChart()
+                            chart.title = ws.cell(row=1, column=col_idx).value
+                            chart.style, chart.width, chart.height, chart.legend = 13, 16, 8, None
+                            chart.add_data(Reference(ws, min_col=col_idx, min_row=1, max_row=ws.max_row), titles_from_data=True)
+                            chart.set_categories(Reference(ws, min_col=1, min_row=2, max_row=ws.max_row))
+                            ws.add_chart(chart, f"{'A' if chart_idx % 2 == 0 else 'I'}{start_chart_row + (chart_idx // 2) * 16}")
+                            chart_idx += 1
+
+            bytes_io.seek(0)
+            return bytes_io.read()
+
+        # UI Layout
+        col1, col2 = st.columns([2, 1])
+
+        with col1:
+            uploaded_files = st.file_uploader("Upload TikTok exports (Excel .xlsx)", type=["xlsx"], accept_multiple_files=True, key="tiktok_daily_uploader")
+            sukses_tanggal = [] 
+            if uploaded_files:
+                for uploaded in uploaded_files:
+                    uploaded_bytes = uploaded.read()
+                    date_val = read_date_from_a1(io.BytesIO(uploaded_bytes))
+                    if not date_val:
+                        st.error(f"Gagal ekstrak tanggal dari file: {uploaded.name}")
+                    else:
+                        df_raw = read_data_table(io.BytesIO(uploaded_bytes))
+                        if df_raw.empty:
+                            st.error(f"Gagal baca data tabel: {uploaded.name}")
+                        else:
+                            add_to_session_cache(date_val, normalize_and_filter_df(df_raw))
+                            sukses_tanggal.append(str(date_val))
+            if sukses_tanggal:
+                st.success(f"Berhasil menyimpan {len(sukses_tanggal)} dataset untuk tanggal: {', '.join(sukses_tanggal)}")
+
+        with col2:
+            datasets = st.session_state.get("tiktok_daily_datasets", OrderedDict())
+            if not datasets:
+                st.info("Cache kosong.")
+            else:
+                st.write("**Datasets in cache**")
+                st.table(pd.DataFrame([{"date": k, "rows": len(v)} for k, v in datasets.items()]).set_index('date'))
+                to_remove = st.selectbox("Hapus tanggal (pilih)", [""] + list(datasets.keys()), key="tiktok_daily_remove")
+                if to_remove and st.button("Hapus tanggal", key="tiktok_daily_btn_rem"):
+                    remove_date_from_cache(to_remove)
+                    st.rerun()
+                if st.button("Clear all cache", key="tiktok_daily_btn_clr"):
+                    clear_cache()
+                    st.rerun()
+
+        st.markdown("---")
+        if not datasets: st.stop()
+
+        # Missing Dates Logic
+        valid_dates = [pd.to_datetime(str(k).split('~')[0].strip(), errors='coerce').date() for k in datasets.keys()]
+        valid_dates = sorted([d for d in valid_dates if pd.notna(d)])
+        if len(valid_dates) > 1:
+            expected_days = (valid_dates[-1] - valid_dates[0]).days + 1
+            if len(valid_dates) < expected_days:
+                expected_set = {valid_dates[0] + pd.Timedelta(days=i) for i in range(expected_days)}
+                missing_str = ", ".join([d.strftime("%Y-%m-%d") for d in sorted(expected_set - set(valid_dates))])
+                st.warning(f"⚠️ **Peringatan Data Bolong!** Ada tanggal yang terlewat: {missing_str}")
+
+        # Export Button
+        st.subheader("📥 Export Laporan Akhir")
+        excel_bytes = build_product_sheets(datasets)
+        if excel_bytes:
+            st.download_button("Download Excel Laporan (1 Sheet per Produk + Grafik)", excel_bytes, 'laporan_per_product.xlsx', mime='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', key="tiktok_daily_dl_excel")
+        else:
+            st.info("Unggah file yang memiliki kolom Produk untuk membuat format Excel per-sheet.")
+
+        st.markdown("---")
+        
+        # Tabs and Charts
+        frames = []
+        for date_key, df in datasets.items():
+            parsed = pd.to_datetime(str(date_key).split('~')[0].strip(), errors='coerce')
+            if pd.notna(parsed):
+                d = df.copy()
+                d['date'] = parsed.date()
+                frames.append(d)
+                
+        if not frames: st.stop()
+        all_data = pd.concat(frames, ignore_index=True, sort=False)
+        numeric_metrics = [c for c in ALLOWED_METRICS if c in all_data.columns and c not in ('ID', 'Produk', 'Status')]
+        daftar_produk = sorted([p for p in all_data['Produk'].unique() if str(p).strip() not in ('nan', '', 'None')]) if 'Produk' in all_data.columns else []
+
+        def show_charts(df_plot):
+            if df_plot.empty: return st.info("Data tidak cukup untuk grafik.")
+            col_a, col_b = st.columns(2)
+            for idx, metric in enumerate(numeric_metrics):
+                if metric in df_plot.columns:
+                    with (col_a if idx % 2 == 0 else col_b):
+                        st.caption(f"**{metric}**")
+                        st.line_chart(df_plot[[metric]])
+
+        tabs = st.tabs(["📊 Keseluruhan (All)"] + [f"🛍️ {p[:20]}..." if len(p) > 20 else f"🛍️ {p}" for p in daftar_produk])
+        
+        with tabs[0]:
+            agg = build_daily_aggregate(datasets)
+            if agg.empty: st.warning("Tidak ada data numerik.")
+            else:
+                sub1, sub2 = st.tabs(["🧮 Tabel Data", "📈 Grafik Tren"])
+                with sub1:
+                    st.write(style_daily_aggregate(agg).to_html(), unsafe_allow_html=True)
+                    st.download_button("📥 Download CSV (All)", agg.reset_index().to_csv(index=False), "daily_aggregate_all.csv", mime='text/csv', key="tiktok_daily_dl_csv")
+                with sub2: show_charts(agg)
+
+        for i, produk_name in enumerate(daftar_produk):
+            with tabs[i + 1]:
+                df_produk = all_data[all_data['Produk'] == produk_name]
+                agg_produk = df_produk.groupby('date')[numeric_metrics].sum().sort_index()
+                if agg_produk.empty: st.info("Tidak ada data numerik.")
+                else:
+                    sub1, sub2 = st.tabs(["🧮 Tabel Data", "📈 Grafik Tren"])
+                    with sub1: st.write(style_daily_aggregate(agg_produk).to_html(), unsafe_allow_html=True)
+                    with sub2: show_charts(agg_produk)
 # -----------------------------
 # MAIN: render navbar then the selected app
 # -----------------------------
