@@ -667,6 +667,16 @@ def app_shopee_cpas():
 
                 totals_df = pd.DataFrame(totals).reset_index(drop=True)
 
+                # --- TAMBAHKAN KODE INI UNTUK SORTING PRODUK INDUK ---
+                sort_col_induk = "Penjualan (Pesanan Siap Dikirim) (IDR)"
+                if sort_col_induk in totals_df.columns:
+                    totals_df[sort_col_induk] = pd.to_numeric(totals_df[sort_col_induk], errors="coerce").fillna(0)
+                    totals_df = totals_df.sort_values(by=sort_col_induk, ascending=False)
+                    
+                # Update product_order berdasarkan totals_df yang sudah di-sort
+                product_order = totals_df["Kode Produk"].tolist()
+                # -----------------------------------------------------
+
                 final_rows = []
                 for kp in product_order:
                     tot_row = totals_df[totals_df["Kode Produk"] == kp]
@@ -675,7 +685,7 @@ def app_shopee_cpas():
                         final_rows.append(tot_row)
                     
                     var_rows = grouped[grouped["Kode Produk"] == kp].copy()
-                    sort_col = "Total Penjualan (Pesanan Dibuat) (IDR)"
+                    sort_col = "Penjualan (Pesanan Siap Dikirim) (IDR)"
                     if sort_col in var_rows.columns:
                         var_rows[sort_col] = pd.to_numeric(var_rows[sort_col], errors="coerce").fillna(0)
                         var_rows = var_rows.sort_values(by=sort_col, ascending=False)
