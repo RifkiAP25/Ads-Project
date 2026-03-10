@@ -47,7 +47,7 @@ def navbar():
 
 def app_shopee_cpas():
     # --- Page config and CSS for Shopee theme (scoped to this page) ---
-    st.title("📁 Excel Utilities — Dot/Comma • Sort • Filter • CSV Iklan")
+    st.title("📁 Excel Utilities — Gabungan • Variasi • CSV Iklan")
     st.write("Pilih fitur di sidebar")
 
     st.markdown("""
@@ -66,7 +66,9 @@ def app_shopee_cpas():
     </style>
     """, unsafe_allow_html=True)
 
-    # Helpers (copied from original)
+    # ==========================================
+    # HELPER FUNCTIONS
+    # ==========================================
     def read_uploaded_bytes(uploaded_file) -> Optional[bytes]:
         if uploaded_file is None:
             return None
@@ -89,7 +91,6 @@ def app_shopee_cpas():
             if isinstance(x, str):
                 return x.replace('.', 'DOT').replace(',', '.').replace('DOT', ',')
             return x
-        # Use map for newer Pandas or applymap for older
         if hasattr(df, 'map'):
             return df.map(swap_cell)
         return df.applymap(swap_cell)
@@ -126,16 +127,13 @@ def app_shopee_cpas():
         if pd.isna(nama):
             return nama
         text = str(nama).strip()
-        if text.lower().startswith("grup iklan"):
+        if text.lower().startswith("grup"):
             return text.split(" - ")[0]
         text = re.sub(r"\[.*?\]", "", text).strip()
 
         feature_blacklist = {"busui","friendly","bahan","soft","ultimate","ultimates","motif","size","ukuran","promo","diskon","broad","testing","rayon","katun","cotton","silk","sustra","viscose","linen","polyester","jersey","crepe","chiffon","woolpeach","baloteli","babyterry","pink","hitam","black","putih","white","navy","biru","blue","merah","red","hijau","green","coklat","brown","abu","abu-abu","grey","gray","cream","krem","beige","maroon","ungu","purple","tosca","olive","sage"}
-
         store_blacklist = {"official","shop","store","boutique","fashion","my","zahir","myzahir","by","original","premium"}
-
-        category_keywords = {"gamis","dress","tunik","abaya","set","blouse","khimar","rok","pashmina","hijab","outer",}
-
+        category_keywords = {"gamis","dress","tunik","abaya","set","blouse","khimar","rok","pashmina","hijab","outer"}
         context_blacklist = {"terbaru","new","update","launch","launching","viral","hits","best","seller","bestseller","kondangan","lebaran","ramadhan","ramadan","harian","pesta","formal","casual","trend","trending","populer","2024","2025","2026","2027", "2028", "2029", "2030"}
 
         parts = re.split(r"\s*[-|]\s*", text)
@@ -256,7 +254,6 @@ def app_shopee_cpas():
         else:
             return "HIJAU"
 
-    # --- HELPER FUNCTIONS BARU: RAPIKAN VARIASI PRODUK ---
     def normalize_cols(df):
         return df.rename(columns=lambda c: re.sub(r"\s+", " ", str(c).strip()))
 
@@ -384,22 +381,20 @@ def app_shopee_cpas():
 
 
     # ---------------------------
-    # UI — Sidebar Navigation + Coloring Filter
+    # UI — Sidebar Navigation
     # ---------------------------
     st.sidebar.title("Navigation")
     app_mode = st.sidebar.radio(
         "Pilih fitur",
         options=[
-            "Dot ↔ Comma Converter",
-            "Sort Penjualan Produk",
-            "Filter Nama Produk (Terjual & ATC)",
-            "CSV Iklan → Excel Berwarna",
-            "Rapikan Excel Variasi Produk" # <-- TAMBAHAN BARU
+            "Gabungan: Convert ➔ Sort ➔ Filter",
+            "Rapikan Excel Variasi Produk",
+            "CSV Iklan → Excel Berwarna"
         ],
         key="shopee_app_mode"
     )
 
-    if app_mode in ["CSV Iklan → Excel Berwarna"]:
+    if app_mode == "CSV Iklan → Excel Berwarna":
         st.sidebar.markdown("---")
         st.sidebar.subheader("Coloring filter (CSV Iklan)")
         csv_mode_sidebar = st.sidebar.selectbox(
@@ -416,134 +411,129 @@ def app_shopee_cpas():
         st.sidebar.markdown("---")
         st.sidebar.caption("Catatan: coloring filter hanya mempengaruhi sheet RINGKASAN_IKLAN (preview & export).")
 
-    # ---------------------------
-    # Page modes implementations (kept same as original)
-    # ---------------------------
-    if app_mode == "Dot ↔ Comma Converter":
-        st.header("🔁 Excel Dot ↔ Comma Swapper")
-        st.write("Upload file Excel (semua sheet akan diproses). Semua nilai string akan ditukar `.` ↔ `,`.")
 
-        uploaded = st.file_uploader("📂 Upload file Excel (.xlsx/.xls)", type=["xlsx", "xls"], key="dot_uploader_shopee")
+    # ---------------------------
+    # Page modes implementations
+    # ---------------------------
+
+    # =========================================================================
+    # FITUR 1: GABUNGAN CONVERT -> SORT -> FILTER
+    # =========================================================================
+    if app_mode == "Gabungan: Convert ➔ Sort ➔ Filter":
+        st.header("🗂️ Gabungan: Convert Dot/Comma ➔ Sort ➔ Filter")
+        st.write("Upload 1 file Excel. Proses akan berjalan otomatis dan menghasilkan 2 file Excel:")
+        st.markdown("""
+        * **File 1 (Converter)**: Seluruh sheet dari file asli ditukar titik & koma-nya.
+        * **File 2 (Sort & Filter)**: Mengambil sheet **Performa Produk** (atau sheet pertama), melakukan Sort, lalu hasil Sort difilter untuk nama produk Terjual & ATC.
+        """)
+
+        uploaded = st.file_uploader("📂 Upload file Excel (.xlsx/.xls)", type=["xlsx", "xls"], key="gabung_uploader_shopee")
         if uploaded:
             data = read_uploaded_bytes(uploaded)
             try:
                 xls = pd.ExcelFile(BytesIO(data))
-                sheets_out = {}
+
+                # ==========================================
+                # TAHAP 1: CONVERT DOT <-> COMMA (Ambil dari XLSX asli, semua sheet)
+                # ==========================================
+                sheets_convert = {}
                 for sheet_name in xls.sheet_names:
-                    df = pd.read_excel(xls, sheet_name=sheet_name, dtype=str)
-                    df = swap_dot_comma_df(df)
-                    sheets_out[sheet_name] = df
+                    df_c = pd.read_excel(xls, sheet_name=sheet_name, dtype=str)
+                    df_c = swap_dot_comma_df(df_c)
+                    sheets_convert[sheet_name] = df_c
+                
+                excel_bytes_convert = to_excel_bytes_from_sheets(sheets_convert)
 
-                name, ext = os.path.splitext(uploaded.name)
-                out_name = f"{name}_dotcomma_swapped.xlsx"
-                excel_bytes = to_excel_bytes_from_sheets(sheets_out)
-
-                st.success("✅ File berhasil diproses!")
-                st.download_button(
-                    label="⬇️ Download File Excel (titik-koma tertukar)",
-                    data=excel_bytes,
-                    file_name=out_name,
-                    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                )
-            except Exception as e:
-                st.error(f"❌ Terjadi error saat membaca/menulis Excel: {e}")
-
-    elif app_mode == "Sort Penjualan Produk":
-        st.header("📊 Sort Penjualan Produk")
-        st.write("Upload file Excel → otomatis di-sort berdasarkan `Channel` lalu `Kode Produk` pada sheet `Performa Produk` (fallback ke sheet pertama jika tidak ada).")
-
-        uploaded = st.file_uploader("Upload file Excel (.xlsx/.xls)", type=["xlsx", "xls"], key="sort_uploader_shopee")
-        if uploaded:
-            data = read_uploaded_bytes(uploaded)
-            try:
-                xls = pd.ExcelFile(BytesIO(data))
-                target_sheet = "Performa Produk" if "Performa Produk" in xls.sheet_names else xls.sheet_names[0]
-                df = pd.read_excel(xls, sheet_name=target_sheet)
-
-                st.success(f"File berhasil dibaca (sheet: {target_sheet})")
-
-                required_cols = ["Channel", "Kode Produk"]
-                missing = [c for c in required_cols if c not in df.columns]
-                if missing:
-                    st.error(f"Kolom yang diperlukan tidak ditemukan di sheet `{target_sheet}`: {missing}")
+                # ==========================================
+                # TAHAP 2: SORT PENJUALAN (Ambil dari XLSX asli, target sheet original)
+                # ==========================================
+                target_sheet_sort = "Performa Produk" if "Performa Produk" in xls.sheet_names else xls.sheet_names[0]
+                df_raw_sort = pd.read_excel(xls, sheet_name=target_sheet_sort)
+                
+                req_sort = ["Channel", "Kode Produk"]
+                missing_sort = [c for c in req_sort if c not in df_raw_sort.columns]
+                
+                df_sorted = pd.DataFrame()
+                if not missing_sort:
+                    df_sorted = df_raw_sort.sort_values(by=["Channel", "Kode Produk"], ascending=[True, True])
                 else:
-                    df_sorted = df.sort_values(by=["Channel", "Kode Produk"], ascending=[True, True])
-                    st.subheader("Preview Data (20 baris teratas)")
-                    st.dataframe(df_sorted.head(20), use_container_width=True)
+                    st.warning(f"⚠️ Kolom Sort tidak lengkap {missing_sort} di sheet '{target_sheet_sort}'. Menggunakan data tanpa sort.")
+                    df_sorted = df_raw_sort.copy()
 
-                    output = BytesIO()
-                    df_sorted.to_excel(output, index=False)
-                    output.seek(0)
+                # ==========================================
+                # TAHAP 3: FILTER NAMA PRODUK (Ambil dari dataframe hasil Sort)
+                # ==========================================
+                df_terjual = pd.DataFrame()
+                df_atc = pd.DataFrame()
+                
+                req_filter = ["Channel", "Produk", "Produk.1", "Produk Ditambahkan ke Keranjang"]
+                missing_filter = [c for c in req_filter if c not in df_sorted.columns]
+                
+                if not missing_filter:
+                    df_filter = df_sorted.copy()
+                    
+                    # Pastikan konversi ke numerik aman
+                    df_filter["Produk.1"] = pd.to_numeric(df_filter["Produk.1"], errors="coerce").fillna(0)
+                    df_filter["Produk Ditambahkan ke Keranjang"] = pd.to_numeric(df_filter["Produk Ditambahkan ke Keranjang"], errors="coerce").fillna(0)
 
+                    # Filter Terjual
+                    df_terjual = (
+                        df_filter[df_filter["Produk.1"] > 0][["Channel", "Produk"]]
+                        .drop_duplicates()
+                        .sort_values(by=["Channel", "Produk"])
+                        .reset_index(drop=True)
+                    )
+
+                    # Filter ATC
+                    df_atc = (
+                        df_filter[df_filter["Produk Ditambahkan ke Keranjang"] > 0][["Channel", "Produk"]]
+                        .drop_duplicates()
+                        .sort_values(by=["Channel", "Produk"])
+                        .reset_index(drop=True)
+                    )
+                else:
+                    st.warning(f"⚠️ Kolom Filter tidak lengkap {missing_filter}. Tahap Filter dilewati.")
+
+                # ==========================================
+                # MENYUSUN HASIL SORT & FILTER KE EXCEL 2
+                # ==========================================
+                sheets_sort_filter = {"1_Data_Sorted": df_sorted}
+                if not df_terjual.empty:
+                    sheets_sort_filter["2_Produk_Terjual"] = df_terjual
+                if not df_atc.empty:
+                    sheets_sort_filter["3_Nama_Produk_ATC"] = df_atc
+                
+                excel_bytes_sort_filter = to_excel_bytes_from_sheets(sheets_sort_filter)
+
+                # ==========================================
+                # UI DOWNLOAD
+                # ==========================================
+                st.success("✅ Seluruh proses selesai! Silakan unduh file hasilnya di bawah ini:")
+
+                col1, col2 = st.columns(2)
+                with col1:
                     st.download_button(
-                        label="⬇️ Download hasil Excel (penjualan_sorted.xlsx)",
-                        data=output.getvalue(),
-                        file_name="penjualan_sorted.xlsx",
+                        label="⬇️ Download Excel 1 (Dot/Comma)",
+                        data=excel_bytes_convert,
+                        file_name="1_dotcomma_swapped.xlsx",
                         mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                     )
+                with col2:
+                    st.download_button(
+                        label="⬇️ Download Excel 2 (Sort & Filter)",
+                        data=excel_bytes_sort_filter,
+                        file_name="2_hasil_sort_dan_filter.xlsx",
+                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    )
+                
+                st.subheader("Preview File 2 - Sorted Data (10 Baris Pertama)")
+                st.dataframe(df_sorted.head(10), use_container_width=True)
+
             except Exception as e:
                 st.error(f"❌ Terjadi error: {e}")
 
-    elif app_mode == "Filter Nama Produk (Terjual & ATC)":
-        st.header("🧾 Filter Nama Produk (Terjual & ATC)")
-        st.write("Upload Excel → ambil nama produk saja → download hasil")
-
-        uploaded = st.file_uploader("Upload file Excel (1 sheet)", type=["xlsx", "xls"], key="filter_uploader_shopee")
-        if uploaded:
-            try:
-                df = pd.read_excel(uploaded)
-                st.success("File berhasil dibaca")
-
-                required_cols = [
-                    "Channel",
-                    "Produk",
-                    "Produk.1",
-                    "Produk Ditambahkan ke Keranjang"
-                ]
-                missing = [c for c in required_cols if c not in df.columns]
-                if missing:
-                    st.error(f"Kolom tidak ditemukan: {missing}")
-                else:
-                    df["Produk.1"] = pd.to_numeric(df["Produk.1"], errors="coerce").fillna(0)
-                    df["Produk Ditambahkan ke Keranjang"] = pd.to_numeric(df["Produk Ditambahkan ke Keranjang"], errors="coerce").fillna(0)
-
-                    df_terjual = (
-                        df[df["Produk.1"] > 0][["Channel", "Produk"]]
-                        .drop_duplicates()
-                        .sort_values(by=["Channel", "Produk"])
-                        .reset_index(drop=True)
-                    )
-
-                    df_atc = (
-                        df[df["Produk Ditambahkan ke Keranjang"] > 0][["Channel", "Produk"]]
-                        .drop_duplicates()
-                        .sort_values(by=["Channel", "Produk"])
-                        .reset_index(drop=True)
-                    )
-
-                    st.subheader("Preview – Produk Terjual")
-                    st.dataframe(df_terjual.head(20), use_container_width=True)
-
-                    st.subheader("Preview – Produk ATC")
-                    st.dataframe(df_atc.head(20), use_container_width=True)
-
-                    sheets_out = {
-                        "Produk Terjual": df_terjual,
-                        "Nama Produk ATC": df_atc
-                    }
-                    excel_bytes = to_excel_bytes_from_sheets(sheets_out)
-
-                    st.download_button(
-                        label="⬇️ Download Excel Nama Produk (terjual & atc)",
-                        data=excel_bytes,
-                        file_name="nama_produk_terjual_dan_atc.xlsx",
-                        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                    )
-            except Exception as e:
-                st.error(f"Terjadi error: {e}")
-
     # =========================================================================
-    # FITUR BARU: RAPIKAN EXCEL VARIASI PRODUK
+    # FITUR 2: RAPIKAN EXCEL VARIASI PRODUK
     # =========================================================================
     elif app_mode == "Rapikan Excel Variasi Produk":
         st.header("✨ Rapikan file XLSX/CSV — Produk & Variasi")
@@ -667,15 +657,12 @@ def app_shopee_cpas():
 
                 totals_df = pd.DataFrame(totals).reset_index(drop=True)
 
-                # --- TAMBAHKAN KODE INI UNTUK SORTING PRODUK INDUK ---
                 sort_col_induk = "Penjualan (Pesanan Siap Dikirim) (IDR)"
                 if sort_col_induk in totals_df.columns:
                     totals_df[sort_col_induk] = pd.to_numeric(totals_df[sort_col_induk], errors="coerce").fillna(0)
                     totals_df = totals_df.sort_values(by=sort_col_induk, ascending=False)
                     
-                # Update product_order berdasarkan totals_df yang sudah di-sort
                 product_order = totals_df["Kode Produk"].tolist()
-                # -----------------------------------------------------
 
                 final_rows = []
                 for kp in product_order:
@@ -771,13 +758,12 @@ def app_shopee_cpas():
                     key="dl_rapi_csv_shopee"
                 )
 
-                st.success("Selesai. Silakan unduh file atau cek pratinjau di atas (di paling bawah pratinjau).")
+                st.success("Selesai. Silakan unduh file atau cek pratinjau di atas.")
 
     # =========================================================================
-    # ORIGINAL LOGIC: CSV Iklan -> Excel Berwarna
+    # FITUR 3: CSV IKLAN -> EXCEL BERWARNA
     # =========================================================================
-    else:
-        # CSV Iklan → Excel Berwarna
+    elif app_mode == "CSV Iklan → Excel Berwarna":
         st.header("📊 CSV Iklan → Excel Berwarna")
         st.write("Upload CSV iklan Shopee → otomatis rapi → download Excel laporan")
 
@@ -892,29 +878,47 @@ def app_shopee_cpas():
                                 wb.remove(wb["RINGKASAN_IKLAN"])
                             ws_ring = wb.create_sheet("RINGKASAN_IKLAN")
 
-                            headers = ["MERAH", "KUNING", "HIJAU", "BIRU"]
-                            color_map = {
-                                "MERAH": "FF0000",
-                                "KUNING": "000000",
-                                "HIJAU": "00AA00",
-                                "BIRU": "0066CC"
-                            }
-
-                            for c_idx, h in enumerate(headers, start=1):
-                                cell = ws_ring.cell(row=1, column=c_idx, value=h)
-                                cell.font = Font(bold=True)
-
                             if csv_mode == "CSV Keseluruhan (Normal)":
-                                for c_idx, key in enumerate(headers, start=1):
-                                    items = filtered_per_col.get(key, [])
-                                    if items:
-                                        text = "\n".join(items)
-                                        cell = ws_ring.cell(row=2, column=c_idx, value=text)
-                                        cell.font = Font(color=color_map[key])
-                                        cell.alignment = Alignment(wrap_text=True, vertical="top")
-                                    else:
-                                        ws_ring.cell(row=2, column=c_idx, value="")
+                                # --- VERSI SINGKAT TANPA WARNA ---
+                                ws_ring.cell(row=1, column=1, value="DAFTAR IKLAN (URUT)")
+                                ws_ring.cell(row=1, column=1).font = Font(bold=True)
+                                
+                                # Ambil semua nama yang disetujui filter sidebar
+                                semua_nama = []
+                                for item in ordered_for_numbering:
+                                    kat = item["kategori"]
+                                    if (kat == "MERAH" and include_merah) or \
+                                       (kat == "KUNING" and include_kuning) or \
+                                       (kat == "HIJAU" and include_hijau) or \
+                                       (kat == "BIRU" and include_biru):
+                                        semua_nama.append(item["nama"])
+                                
+                                # Hilangkan duplikat dan urutkan sesuai abjad
+                                semua_nama = sorted(list(set(semua_nama)))
+                                
+                                if semua_nama:
+                                    # Gabung dengan nomor urut
+                                    text_gabungan = "\n".join([f"{i+1}. {nama}" for i, nama in enumerate(semua_nama)])
+                                    cell = ws_ring.cell(row=2, column=1, value=text_gabungan)
+                                    cell.alignment = Alignment(wrap_text=True, vertical="top")
+                                    cell.font = Font(color="000000") # Teks hitam standar
+                                
+                                ws_ring.column_dimensions["A"].width = 60
+                                
                             else:
+                                # --- MODE GRUP IKLAN (TETAP PAKAI WARNA) ---
+                                headers = ["MERAH", "KUNING", "HIJAU", "BIRU"]
+                                color_map = {
+                                    "MERAH": "FF0000",
+                                    "KUNING": "000000",
+                                    "HIJAU": "00AA00",
+                                    "BIRU": "0066CC"
+                                }
+
+                                for c_idx, h in enumerate(headers, start=1):
+                                    cell = ws_ring.cell(row=1, column=c_idx, value=h)
+                                    cell.font = Font(bold=True)
+
                                 for c_idx, key in enumerate(headers, start=1):
                                     items = filtered_per_col.get(key, [])
                                     if items:
@@ -927,9 +931,9 @@ def app_shopee_cpas():
                                     else:
                                         ws_ring.cell(row=2, column=c_idx, value="")
 
-                            for i in range(1, 5):
-                                col_letter = get_column_letter(i)
-                                ws_ring.column_dimensions[col_letter].width = 40
+                                for i in range(1, 5):
+                                    col_letter = get_column_letter(i)
+                                    ws_ring.column_dimensions[col_letter].width = 40
 
                             tanpa_konversi_df.to_excel(writer, sheet_name=">10K_TANPA_KONVERSI", index=False)
                             ws_tc = writer.book[">10K_TANPA_KONVERSI"]
