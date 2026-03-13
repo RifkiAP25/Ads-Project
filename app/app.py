@@ -47,9 +47,10 @@ def navbar():
 # -----------------------------
 
 
+
 def app_shopee_cpas():
     # --- Page config and CSS for Shopee theme (scoped to this page) ---
-    st.title("Shopee & CPAS — Excel Utilities")
+    st.title("Shopee & CPAS — Utilities")
 
     st.markdown("""
     <style>
@@ -358,14 +359,15 @@ def app_shopee_cpas():
         out.seek(0)
         return out
 
-
     # =========================================================================
     # NAVIGATION VIA TABS (MENGGANTIKAN SIDEBAR)
     # =========================================================================
-    tab_out, tab_analitik, tab_ads = st.tabs([
+    # KITA TAMBAHKAN 1 TAB BARU: "🔗 UTM Link Cleaner"
+    tab_out, tab_analitik, tab_ads, tab_link = st.tabs([
         "🗂️ Shopee Out Platform", 
         "✨ Analitik Produk", 
-        "📊 Shopee Ads"
+        "📊 Shopee Ads",
+        "🔗 UTM Link Cleaner"
     ])
 
     # =========================================================================
@@ -686,7 +688,6 @@ def app_shopee_cpas():
         st.header("Shopee Ads - CSV to Excel")
         st.markdown("Upload CSV iklan Shopee → otomatis rapi → download Excel laporan")
 
-        # Pindahkan opsi sidebar ke dalam area ini
         st.markdown("##### Pengaturan Filter Laporan")
         csv_mode = st.selectbox(
             "Mode CSV",
@@ -864,7 +865,7 @@ def app_shopee_cpas():
                                     cell = ws_hi.cell(row=r, column=c)
                                     cell.font = Font(color="006400")
 
-                        buffer.seek(0)
+                            buffer.seek(0)
 
                     st.success("Excel laporan siap di-download 👇")
                     st.download_button(
@@ -876,6 +877,44 @@ def app_shopee_cpas():
                     )
                 except Exception as e:
                     st.error(f"Terjadi error saat memproses file: {e}")
+
+    # =========================================================================
+    # FITUR 4: SHOPEE UTM Link Cleaner
+    # =========================================================================
+    with tab_link:
+        st.header("🛍️ Shopee UTM Link Cleaner")
+        st.write("Aplikasi sederhana untuk mengubah link panjang Shopee menjadi link pendek yang rapi.")
+
+        # Input dari pengguna
+        url_input = st.text_input("Masukkan Link Shopee Panjang:", placeholder="https://shopee.co.id/Dress-Lebaran...", key="shopee_link_input")
+
+        # Tombol proses
+        if st.button("Bersihkan Link", key="clean_link_button"):
+            if url_input:
+                # Mencari pola -i.[ShopID].[ItemID] di dalam link
+                match = re.search(r'-i\.(\d+)\.(\d+)', url_input)
+                
+                if match:
+                    shop_id = match.group(1)
+                    item_id = match.group(2)
+                    
+                    # Menyusun ulang link baru
+                    clean_url = f"https://shopee.co.id/product/{shop_id}/{item_id}"
+                    
+                    st.success("Berhasil! Ini link baru kamu:")
+                    
+                    # Menampilkan hasil dengan tombol copy (st.code otomatis ada tombol copy di pojok kanannya)
+                    st.code(clean_url, language="text")
+                    
+                    # Menambahkan tombol untuk langsung membuka link tersebut
+                    st.markdown(f"[🔗 Klik di sini untuk membuka link produk]({clean_url})")
+                    
+                else:
+                    st.error("Link tidak valid atau format tidak dikenali. Pastikan link adalah link produk Shopee yang benar.")
+            else:
+                st.warning("Silakan masukkan link terlebih dahulu sebelum menekan tombol.")
+
+ 
 # -----------------------------
 # APP 2: META KPI Highlight (wrapped)
 # -----------------------------
