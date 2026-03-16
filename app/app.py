@@ -24,7 +24,10 @@ st.set_page_config(page_title="Multi-Platform Excel Utilities", layout="wide")
 # -----------------------------
 # NAVBAR (Top horizontal) — pilih halaman platform
 # -----------------------------
-PAGES = ["Shopee", "Meta", "TikTok"]
+# -----------------------------
+# NAVBAR (Top horizontal) — pilih halaman platform
+# -----------------------------
+PAGES = ["Panduan", "Shopee", "Meta", "TikTok"]
 
 # 1. Inisialisasi awal session state
 if "page" not in st.session_state:
@@ -1782,6 +1785,80 @@ def app_tiktok():
                     with sub1: st.write(style_daily_aggregate(agg_produk).to_html(), unsafe_allow_html=True)
                     with sub2: show_charts(agg_produk)
 
+# -----------------------------
+# APP 4: Guide / Panduan
+# -----------------------------
+
+def app_tutorial():
+    st.title("📖 Panduan Penggunaan Tools")
+    st.markdown("""
+    Selamat datang di **Multi-Platform Excel Utilities**! Dashboard ini dirancang untuk mempercepat proses pengolahan data iklan dan performa produk dari berbagai platform.
+    
+    Silakan klik pada masing-masing platform di bawah ini untuk melihat cara kerja dan format file yang dibutuhkan.
+    """)
+
+    # --- PANDUAN SHOPEE ---
+    with st.expander("🟠 Panduan Shopee & CPAS", expanded=True):
+        st.markdown("""
+        **1. Shopee Out platform**
+        * **Fungsi:** Menukar titik & koma pada angka (agar bisa diolah), mengurutkan data berdasarkan channel, dan memfilter produk yang terjual/masuk keranjang.
+        * **Format File:** Excel (`.xlsx` / `.xls`) hasil *export* performa produk Shopee. Pastikan ada sheet bernama **Performa Produk**.
+        * **Cara pakai:** Unduh file laporan out  platform Shopee, lalu upload di tab ini. Proses akan otomatis menghasilkan 2 file Excel: 1 untuk hasil convert titik/komanya (JIka perlu), dan 1 lagi untuk hasil sort/filter berdasarkan channel.
+        
+        **2. ✨ Analitik Produk (Rapikan Variasi)**
+        * **Fungsi:** Menggabungkan baris variasi produk menjadi satu total penjualan, memberikan *highlight* warna, dan menghitung persentase konversi secara otomatis.
+        * **Format File:** Excel (`.xlsx`) atau CSV dari analitik produk Shopee. Pastikan memiliki kolom **Kode Produk** dan **Nama Variasi**.
+        * **Cara pakai:** Upload file analitik produk, lalu klik tombol "Process". Hasilnya akan berupa file Excel yang sudah di-merge, diberi warna, memiliki dropdown warna khusus, serta baris **Grand Total** di akhir setiap produk.
+        
+        **3. 📊 Shopee Ads (CSV to Excel)**
+        * **Fungsi:** Merapikan data mentah iklan Shopee dan memberikan *highlight* warna otomatis berdasarkan performa ROAS/Efektivitas (Merah = Buruk, Kuning = Sedang, Hijau = Bagus).
+        * **Format File:** File mentah `.csv` dari Shopee Ads. Pilih mode "Keseluruhan" atau "Grup Iklan" sesuai kebutuhan.
+        * **Cara pakai:** Upload file CSV, pilih mode yang sesuai, dan hasilnya akan langsung bisa diunduh dalam format Excel yang sudah dirapikan dan diberi warna.
+        
+        **4. 🔗 UTM Link Cleaner**
+        * **Fungsi:** Membersihkan link produk Shopee yang terlalu panjang (karena UTM tracking) menjadi link pendek yang rapi untuk dibagikan.
+        * **Cara Pakai:** *Paste* link panjang, klik proses, dan *copy* hasilnya.
+        """)
+
+    # --- PANDUAN META ---
+    with st.expander("🔵 Panduan Meta Ads"):
+        st.markdown("""
+        Tools ini berfungsi untuk memberikan *highlight* warna (merah/hijau) secara otomatis pada KPI yang penting seperti CPM, CTR, Frekuensi, dan ROAS.
+        
+        **1. Tab CPAS (Standar)**
+        * Gunakan tab ini untuk data hasil *export* Meta Ads standar.
+        * **Format File:** Excel (`.xlsx`). Header tabel harus berada di **baris ke-1**.
+        
+        **2. Tab Whatsapp Ads (Custom)**
+        * Gunakan tab ini jika *export* data Meta kamu memiliki format khusus (misalnya ada *summary* di atas tabel).
+        * **Format File:** Excel (`.xlsx`). Sistem membaca header tabel dimulai dari **baris ke-3**.
+        
+        💡 **Indikator Warna Meta:**
+        * 🔴 **Merah:** CPM > 15.000, CTR < 0.5%, Frekuensi > 3, atau Biaya per hasil terlalu tinggi.
+        * 🟢 **Hijau:** ROAS >= 10.
+        """)
+
+    # --- PANDUAN TIKTOK ---
+    with st.expander("🎵 Panduan TikTok Ads"):
+        st.markdown("""
+        **1. Excel Fixer & Pewarnaan ROI**
+        * **Fungsi:** Mengamankan ID Campaign agar tidak berubah format menjadi angka *scientific*, mengubah koma menjadi titik, dan mewarnai baris berdasarkan nilai ROI.
+        * **Format File:** Excel (`.xlsx` / `.xls`) dari TikTok Ads. Header dibaca secara otomatis.
+        
+        **2. Daily Ads Comparator**
+        * **Fungsi:** Menggabungkan beberapa file laporan harian menjadi satu *dashboard* tren untuk melihat performa dari hari ke hari (per produk).
+        * **Cara Pakai:** Upload beberapa file harian sekaligus. Sistem akan menyimpannya dalam *cache*. Setelah semua file ter-upload, kamu bisa melihat grafiknya langsung di sini atau men-download hasil Excel-nya (1 sheet per produk).
+        * **Format File:** Laporan harian TikTok (`.xlsx`). Tabel data harus dimulai pada baris ke-4 (Header di baris 3).
+        """)
+
+    # --- TIPS TAMBAHAN ---
+    st.info("""
+    **💡 Tips Penting & Troubleshooting:**
+    * Pastikan kamu selalu mengunduh file *raw* (mentah) langsung dari platform tanpa mengubah format *header*-nya secara manual.
+    * Jika terjadi *error* saat memproses, periksa kembali apakah file yang kamu masukkan sudah berada di tab platform yang benar.
+    * Gunakan tombol "Clear all cache" di halaman TikTok jika kamu ingin mereset perbandingan data harian.
+    """)
+    
 
 # -----------------------------
 # MAIN: render navbar then the selected app
@@ -1791,9 +1868,6 @@ def main():
     st.sidebar.title("Multi-Platform Dashboard")
     st.sidebar.markdown("Pilih platform dari navbar atas atau dari sini:")
     
-    # 4. Ikat selectbox langsung ke st.session_state.page menggunakan parameter 'key'
-    # Tidak perlu lagi st.session_state.page = chosen, karena 'key="page"' 
-    # akan otomatis mengubah st.session_state.page saat opsi dipilih.
     st.sidebar.selectbox(
         "Pilih platform (sidebar)", 
         options=PAGES, 
@@ -1805,8 +1879,10 @@ def main():
 
     # Routing ke aplikasi masing-masing
     if st.session_state.page == PAGES[0]:
-        app_shopee_cpas()
+        app_tutorial()           # <--- Panggil halaman panduan di sini
     elif st.session_state.page == PAGES[1]:
+        app_shopee_cpas()
+    elif st.session_state.page == PAGES[2]:
         app_meta()
     else:
         app_tiktok()
