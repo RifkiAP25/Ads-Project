@@ -1490,7 +1490,7 @@ def app_tiktok():
             "Pembeli unik dari kartu produk", "Rasio klik-tayang dari kartu produk",
             "Persentase konversi dari kartu produk",
         ]
-        MAX_CACHE = 14
+        MAX_CACHE = 30
         PERCENT_NAME_KEYWORDS = ["rasio", "rasio klik", "persentase", "konversi", "ctr", "ratio"]
 
         def read_date_from_a1(uploaded_file) -> date:
